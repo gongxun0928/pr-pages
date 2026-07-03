@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HashBG Read Cache — 设计解读</title>
+<style>
+  :root {
+    --bg: #faf9f7;
+    --surface: #ffffff;
+    --text: #1a1a1a;
+    --muted: #5c5c5c;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --border: #e5e2dc;
+    --callout-info: #eff6ff;
+    --callout-warn: #fffbeb;
+    --callout-def: #f0fdf4;
+    --callout-edge: #fef2f2;
+    --correct: #16a34a;
+    --wrong: #dc2626;
+    --toc-width: 240px;
+    --radius: 10px;
+    --shadow: 0 1px 3px rgba(0,0,0,.06);
+    --font-serif: "Georgia", "Noto Serif SC", "Songti SC", serif;
+    --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "SF Mono", "Menlo", "Consolas", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-serif);
+    font-size: 18px;
+    line-height: 1.75;
+  }
+  .layout {
+    display: flex;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 1.25rem 4rem;
+    gap: 2rem;
+  }
+  nav.toc {
+    position: sticky;
+    top: 1.5rem;
+    align-self: flex-start;
+    width: var(--toc-width);
+    flex-shrink: 0;
+    padding: 1.25rem 0;
+    font-family: var(--font-sans);
+    font-size: .85rem;
+  }
+  nav.toc h2 {
+    font-size: .75rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    margin: 0 0 .75rem;
+  }
+  nav.toc ol {
+    margin: 0;
+    padding-left: 1.1rem;
+  }
+  nav.toc a {
+    color: var(--muted);
+    text-decoration: none;
+    line-height: 1.6;
+  }
+  nav.toc a:hover { color: var(--accent); }
+  main {
+    flex: 1;
+    min-width: 0;
+    padding: 2rem 0;
+  }
+  header.hero {
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  header.hero h1 {
+    font-size: 2rem;
+    line-height: 1.25;
+    margin: 0 0 .5rem;
+  }
+  header.hero .meta {
+    font-family: var(--font-sans);
+    font-size: .9rem;
+    color: var(--muted);
+  }
+  section {
+    margin-bottom: 3rem;
+  }
+  section > h2 {
+    font-size: 1.55rem;
+    margin: 0 0 1rem;
+    padding-top: .5rem;
+  }
+  section > h3 {
+    font-size: 1.15rem;
+    margin: 2rem 0 .75rem;
+    font-family: var(--font-sans);
+  }
+  p { margin: 0 0 1rem; }
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: var(--callout-info);
+    padding: 1rem 1.25rem;
+    margin: 1.25rem 0;
+    border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: .95rem;
+  }
+  .callout.def { border-color: #22c55e; background: var(--callout-def); }
+  .callout.warn { border-color: #f59e0b; background: var(--callout-warn); }
+  .callout.edge { border-color: #ef4444; background: var(--callout-edge); }
+  .callout strong { display: block; margin-bottom: .35rem; font-family: var(--font-sans); }
+  pre, .code-block {
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 1rem 1.25rem;
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: .82rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    margin: 1rem 0;
+    box-shadow: var(--shadow);
+  }
+  .diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    margin: 1.5rem 0;
+    box-shadow: var(--shadow);
+    font-family: var(--font-sans);
+    font-size: .9rem;
+  }
+  .diagram-title {
+    font-weight: 600;
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+  .flow-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    margin: .75rem 0;
+  }
+  .node {
+    background: var(--accent-soft);
+    border: 1px solid #93c5fd;
+    border-radius: 6px;
+    padding: .45rem .75rem;
+    font-size: .85rem;
+    white-space: nowrap;
+  }
+  .node.client { background: #fce7f3; border-color: #f9a8d4; }
+  .node.worker { background: #dcfce7; border-color: #86efac; }
+  .node.ufs { background: #fef3c7; border-color: #fcd34d; }
+  .node.meta { background: #f3e8ff; border-color: #d8b4fe; }
+  .node.disk { background: #e0e7ff; border-color: #a5b4fc; }
+  .arrow {
+    color: var(--muted);
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+  .data-tag {
+    display: inline-block;
+    background: #334155;
+    color: #f8fafc;
+    font-family: var(--font-mono);
+    font-size: .75rem;
+    padding: .15rem .5rem;
+    border-radius: 4px;
+    margin: .15rem .2rem;
+  }
+  .layer-stack {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    max-width: 420px;
+  }
+  .layer {
+    text-align: center;
+    padding: .6rem 1rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #f8fafc;
+    font-size: .85rem;
+  }
+  .layer.highlight {
+    background: var(--accent-soft);
+    border-color: #93c5fd;
+    font-weight: 600;
+  }
+  .layer-arrow {
+    text-align: center;
+    color: var(--muted);
+    font-size: .9rem;
+  }
+  .file-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: .75rem;
+    margin: 1rem 0;
+  }
+  .file-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .85rem 1rem;
+    font-family: var(--font-sans);
+    font-size: .82rem;
+  }
+  .file-card .path {
+    font-family: var(--font-mono);
+    font-size: .75rem;
+    color: var(--accent);
+    word-break: break-all;
+    margin-bottom: .4rem;
+  }
+  .file-card .desc { color: var(--muted); font-size: .8rem; line-height: 1.45; }
+  .badge {
+    display: inline-block;
+    font-size: .7rem;
+    font-family: var(--font-sans);
+    padding: .15rem .45rem;
+    border-radius: 4px;
+    background: #e2e8f0;
+    color: #475569;
+    margin-right: .3rem;
+  }
+  .badge.new { background: #dcfce7; color: #166534; }
+  .badge.refactor { background: #fef3c7; color: #92400e; }
+  ul, ol { margin: 0 0 1rem; padding-left: 1.4rem; }
+  li { margin-bottom: .35rem; }
+  @media (max-width: 860px) {
+    .layout { flex-direction: column; }
+    nav.toc {
+      position: static;
+      width: 100%;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1rem;
+    }
+    body { font-size: 16px; }
+    header.hero h1 { font-size: 1.55rem; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc">
+  <h2>目录</h2>
+  <ol>
+    <li><a href="#background">背景</a></li>
+    <li><a href="#background-deep">— 分布式文件系统入门</a></li>
+    <li><a href="#background-narrow">— 与本分支直接相关</a></li>
+    <li><a href="#intuition">直觉</a></li>
+    <li><a href="#intuition-placement">— 放置与 key</a></li>
+    <li><a href="#intuition-write">— 写路径与并发</a></li>
+    <li><a href="#intuition-read">— 读路径与 fallback</a></li>
+    <li><a href="#code">代码导览</a></li>
+    <li><a href="#code-common">— 公共层</a></li>
+    <li><a href="#code-client">— 客户端</a></li>
+    <li><a href="#code-worker">— Worker 重构</a></li>
+    <li><a href="#code-gc-cap">— GC 与容量</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="hero">
+  <h1>HashBG Read Cache</h1>
+  <p class="meta">CurvineIO/curvine-max · PR #49 · 设计解读 · <a href="https://github.com/CurvineIO/curvine-max/pull/49">回到 PR</a></p>
+</header>
+
+<!-- ========== BACKGROUND ========== -->
+<section id="background">
+  <h2>背景</h2>
+  <p>在分布式文件系统里，读性能往往比写更难优化：数据可能躺在远端 UFS（底层统一存储）上，每次读都要跨网络拉取。缓存是经典解法——在靠近计算的 worker 节点上放一份副本，命中则快，未命中则回源。难点在于：缓存必须是<strong>可丢弃的</strong>，绝不能与权威元数据纠缠；并发写入同一逻辑块时不能互相踩踏；删除与覆盖必须在 reader 安全窗口之后回收磁盘。</p>
+  <p>本设计在 Curvine worker 上定义了完整的 <strong>HashBG Read Cache</strong> 第一阶段：从拓扑放置、RPC 协议、worker 分层存储，到 client 侧文件级 prewarm/read/delete，再到后台 GC 与容量分账。下面先从广到窄建立上下文。</p>
+</section>
+
+<section id="background-deep">
+  <h3>分布式文件系统入门（可跳过）</h3>
+  <p>Curvine 把文件切成固定大小的 <em>block</em>，由 <em>worker</em> 节点在本地磁盘（或 SPDK）上持有物理副本。Client 通过 RPC 与 worker 通信：open → 流式 write/read → commit/close。Master 维护文件元数据（inode、长度、版本），worker 维护块级物理布局。</p>
+
+  <div class="diagram">
+    <div class="diagram-title">系统组件（简化）</div>
+    <div class="flow-row">
+      <span class="node client">Client</span>
+      <span class="arrow">⇄ RPC ⇄</span>
+      <span class="node worker">Worker (dev1)</span>
+      <span class="arrow">·</span>
+      <span class="node worker">Worker (dev2)</span>
+      <span class="arrow">·</span>
+      <span class="node worker">Worker (dev3)</span>
+    </div>
+    <div class="flow-row" style="margin-top:.5rem">
+      <span class="node ufs">UFS（权威存储）</span>
+      <span class="arrow">← 未命中时回源 →</span>
+      <span class="node client">Client 读路径</span>
+    </div>
+    <p style="margin:.75rem 0 0;font-size:.85rem;color:var(--muted)">示例：文件 <span class="data-tag">/data/model.bin</span> inode=<span class="data-tag">42</span>，block_size=<span class="data-tag">64MB</span>，offset 0 对应 block_index=<span class="data-tag">1</span></p>
+  </div>
+
+  <div class="callout def">
+    <strong>Block Group (BG)</strong>
+    一组 worker 的集合，负责同一批逻辑块的副本。HashBG 用 <code>hash(inode_id, block_index) % bg_count</code> 决定某个逻辑块属于哪个 BG——注意<strong>不含文件版本</strong>，这样同一逻辑块的不同缓存版本始终落在同一组 worker 上。
+  </div>
+</section>
+
+<section id="background-narrow">
+  <h3>与本 PR 直接相关</h3>
+  <p>此前，worker 只有「普通 block」一种本地数据模型：<code>BlockStore</code> 直接管理 <code>block_map</code> 与 VFS 路径。HashBG read cache 是第二类数据——key 不同、可丢弃、有独立 RPC、需要 metadata-first 删除和后台回收。</p>
+  <p>本设计定义了三件事的大框架：</p>
+  <ol>
+    <li><strong>Worker 分层重构</strong>：<code>BlockStore</code> 变为 facade，下挂 <code>RegularBlockStore</code> 与 <code>HashBgBlockStore</code>，共享 <code>PhysicalDataset</code>。</li>
+    <li><strong>端到端读缓存流</strong>：client 文件级 planner/reader/writer + worker hash RPC handler + RocksDB catalog + 物理文件布局。</li>
+    <li><strong>运维闭环</strong>：retire-reclaim + orphan-sweep 后台任务；HashBG 容量分账与 LRU 淘汰钩子。</li>
+  </ol>
+
+  <div class="diagram">
+    <div class="diagram-title">Worker 新分层（核心架构）</div>
+    <div class="layer-stack">
+      <div class="layer">RPC Handlers · metrics</div>
+      <div class="layer-arrow">↓</div>
+      <div class="layer highlight">BlockStore（facade）</div>
+      <div class="layer-arrow">↙ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ↘</div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <div class="layer" style="flex:1">RegularBlockStore<br><small>普通 Curvine block</small></div>
+        <div class="layer highlight" style="flex:1">HashBgBlockStore<br><small>Read cache（重点）</small></div>
+      </div>
+      <div class="layer-arrow">↓ 共享</div>
+      <div class="layer">PhysicalDataset · VfsDir · WholeFileIo</div>
+      <div class="layer-arrow">↓</div>
+      <div class="layer">WorkerBackground（retire-reclaim · orphan-sweep）</div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== INTUITION ========== -->
+<section id="intuition">
+  <h2>直觉</h2>
+  <p>可以把 HashBG read cache 想象成「按内容寻址的、可丢的 CDN 边缘节点」——但它服从文件系统的 block 切分与 BG 副本规则，而不是 HTTP URL。</p>
+</section>
+
+<section id="intuition-placement">
+  <h3>放置与 key：版本不进 BG 哈希</h3>
+  <p>考虑玩具文件：inode=<strong>100</strong>，读 offset=<strong>0</strong>，block_size=<strong>1MB</strong>，当前 <code>f_version=3</code>（由 mtime/len 派生）。</p>
+
+  <div class="diagram">
+    <div class="diagram-title">Key 分解（ReadCache purpose）</div>
+    <ul style="margin:0;padding-left:1.2rem;font-size:.9rem">
+      <li><code>bg_id</code> = hash(100, block_index=1) % 32 → 假设 = <strong>7</strong>（与 f_version 无关）</li>
+      <li><code>block_id</code> = LogicalBlockId { inode=100, block_index=1, <strong>f_version=3</strong> }</li>
+      <li><code>block_version</code> = 0（read cache 阶段固定）</li>
+    </ul>
+    <p style="margin-top:.75rem;font-size:.85rem">磁盘路径示例：<br>
+    <span class="data-tag">…/hashbg/bg_7/i_100/b_1/v_3/attempt-uuid.tmp</span> → rename → <span class="data-tag">…/v_3/&lt;object_id&gt;.blk</span></p>
+  </div>
+
+  <div class="callout">
+    <strong>为什么 bg_id 不含 f_version？</strong>
+    若版本参与 BG 哈希，reader 在只知道 inode 和 block_index 时无法确定该问哪组 worker——而 f_version 又嵌在 block_id 里用于区分缓存版本。把 BG 选择与版本解耦，消除了循环依赖。
+  </div>
+</section>
+
+<section id="intuition-write">
+  <h3>写路径：UUID 尝试对象 + 指针切换</h3>
+  <p>两个 prewarm 任务同时写同一 logical block 时，若共享确定性 temp 文件名，会互相 unlink、发布短写对象。解法是：每次写分配唯一 <code>object_id</code>（UUID），字节写入独立 temp 文件，长度校验通过后 rename 为不可变 ready 对象，最后<strong>原子切换</strong> catalog 指针（last-commit-wins）。输家的物理文件进入 retire 队列，由后台 grace 期后 unlink。</p>
+
+  <div class="diagram">
+    <div class="diagram-title">一次 HashBG 写（玩具数据：expected_len=1048576）</div>
+    <div class="flow-row">
+      <span class="node client">open_for_write</span>
+      <span class="arrow">→</span>
+      <span class="node meta">reserve 账本 + 创建 .tmp</span>
+      <span class="arrow">→</span>
+      <span class="node disk">流式 write 1MB</span>
+      <span class="arrow">→</span>
+      <span class="node meta">commit: rename + publish_ready</span>
+    </div>
+    <p style="font-size:.85rem;color:var(--muted);margin:.75rem 0 0">覆盖写：catalog 先指向新 object_id，旧 object 入 retire 队列——请求路径不直接 unlink。</p>
+  </div>
+
+  <div class="callout warn">
+    <strong>Phase 1 边界</strong>
+    HashBG 只支持 file-backed data dir（DISK/SSD/HDD/MEM），显式拒绝 SPDK_DISK。普通 Curvine block 的 SPDK 路径不受影响。
+  </div>
+</section>
+
+<section id="intuition-read">
+  <h3>读路径：BG 副本重试 → UFS fallback</h3>
+  <p>Client 的 <code>HashFileReader</code> 把文件 read range 切成若干 logical block，对每个 block 先走 HashBG：按 BG worker 列表尝试读，结构化错误（CacheMiss、NotReady、Corrupt）在副本间 retry；全部 exhausted 后对该 block <strong>fallback 到 UFS 权威读</strong>。Worker 读路径不做同步 fill——miss 就是 miss，由上层决定是否 prewarm。</p>
+
+  <div class="diagram">
+    <div class="diagram-title">读一个 block 的决策（f_version=3, bg_id=7）</div>
+    <div class="flow-row">
+      <span class="node client">HashBlockReader</span>
+      <span class="arrow">→ dev2?</span>
+      <span class="node worker">命中 ✓</span>
+    </div>
+    <div class="flow-row">
+      <span class="node client">HashBlockReader</span>
+      <span class="arrow">→ dev1 miss → dev3 miss</span>
+      <span class="node ufs">UfsReader 回源</span>
+    </div>
+    <p style="font-size:.85rem;margin-top:.75rem">文件级统计：<code>cache_blocks</code> vs <code>fallback_blocks</code> 写入 <code>HashFileReadResult</code>。</p>
+  </div>
+</section>
+
+<!-- ========== CODE ========== -->
+<section id="code">
+  <h2>代码导览</h2>
+  <p>以下按「从协议到磁盘」的顺序组织，而非按 commit 时间。后续实现 PR 大致对应：worker 重构 → read cache 流 → GC → object layout 修复 → 文档 → 容量分账。</p>
+</section>
+
+<section id="code-common">
+  <h3>公共层：拓扑、协议、错误</h3>
+  <div class="file-grid">
+    <div class="file-card">
+      <div class="path">curvine-common/src/topology/cluster_view.rs</div>
+      <div class="desc"><span class="badge new">新增</span>LogicalBlockId、HashBlockKey、BlockPurpose、ClusterView::static_three_workers()，BG 选择与 worker 列表解析。</div>
+    </div>
+    <div class="file-card">
+      <div class="path">curvine-common/proto/worker.proto</div>
+      <div class="desc"><span class="badge new">新增</span>HashBlockOpen/Write/Read/Delete/Cancel RPC 消息定义。</div>
+    </div>
+    <div class="file-card">
+      <div class="path">curvine-common/src/error/fs_error.rs</div>
+      <div class="desc"><span class="badge new">新增</span>HashBlockCacheMiss、HashBlockNotReady、HashBlockCorrupt 等结构化读路径错误。</div>
+    </div>
+    <div class="file-card">
+      <div class="path">curvine-common/src/conf/worker_conf.rs</div>
+      <div class="desc">HashBG GC 间隔、grace、orphan sweep、hash_budget 等配置项。</div>
+    </div>
+  </div>
+
+  <pre>// HashBlockKey 读缓存构造（概念摘录）
+HashBlockKey::read_cache(bg_id: 7, block_id: LogicalBlockId {
+    inode_id: 100, block_index: 1, f_version: 3
+})
+// purpose = ReadCache, block_version = 0</pre>
+</section>
+
+<section id="code-client">
+  <h3>客户端：只读 FS + 文件级 API</h3>
+  <p>HashBG 逻辑从普通 <code>CurvineFileSystem</code> 剥离到 <code>CurvineFileSystemReadOnly</code>，三条用户语义：<strong>open/read/close</strong>、<strong>prewarm</strong>、<strong>delete cache</strong>。</p>
+
+  <div class="file-grid">
+    <div class="file-card">
+      <div class="path">curvine-client/src/file/hash_file_planner.rs</div>
+      <div class="desc">把 file offset/len 切成 HashFileBlockRange；HashFileVersion::from_status 派生 f_version。</div>
+    </div>
+    <div class="file-card">
+      <div class="path">curvine-client/src/file/hash_file_reader.rs</div>
+      <div class="desc">HashFileReader / HashFilePrewarmWriter；读计划执行 + UFS fallback 汇总。</div>
+    </div>
+    <div class="file-card">
+      <div class="path">curvine-client/src/block/hash_block_{reader,writer}.rs</div>
+      <div class="desc">Block 级 BG 多副本写/读，读侧按错误类型 retry。</div>
+    </div>
+    <div class="file-card">
+      <div class="path">curvine-cli/src/cmds/fs/hashbg.rs</div>
+      <div class="desc"><span class="badge new">新增</span>调试命令 prewarm / read-check / smoke。</div>
+    </div>
+  </div>
+
+  <pre>// hash_file_planner.rs — f_version 短期派生（不含持久化）
+pub fn from_status(status: &FileStatus) -> HashFileVersion {
+    let source_mtime = if status.storage_policy.ufs_mtime > 0 {
+        status.storage_policy.ufs_mtime
+    } else { status.mtime } };
+    let f_version = stable_file_version(status.id, status.len, source_mtime);
+    ...
+}</pre>
+</section>
+
+<section id="code-worker">
+  <h3>Worker：分层存储与 Handler</h3>
+  <p>最大结构性变更：<code>VfsDataset</code> 删除，由 <code>PhysicalDataset</code> 统一物理视图；catalog 拆为 <code>RegularBlockCatalog</code>（内存）与 <code>HashBgCatalog</code>（RocksDB，含 hash_block / hash_bg / hash_retire CF）。</p>
+
+  <div class="file-grid">
+    <div class="file-card">
+      <div class="path">curvine-server/.../block/block_store.rs</div>
+      <div class="desc"><span class="badge refactor">重构</span>Facade：regular + hash_bg 委托；注册 GC 任务；heartbeat 聚合。</div>
+    </div>
+    <div class="file-card">
+      <div class="path">curvine-server/.../block/hash_bg_store.rs</div>
+      <div class="desc"><span class="badge new">新增</span>773 行 orchestrator：open/commit/abort/read/delete、recover、reclaim、sweep。</div>
+    </div>
+    <div class="file-card">
+      <div class="path">curvine-server/.../block/regular_store.rs</div>
+      <div class="desc"><span class="badge new">新增</span>从原 block_store 抽出的普通 block 逻辑。</div>
+    </div>
+    <div class="file-card">
+      <div class="path">curvine-server/.../catalog/hash_bg_catalog.rs</div>
+      <div class="desc">RocksDB catalog + retire 队列；metadata-first remove。</div>
+    </div>
+    <div class="file-card">
+      <div class="path">curvine-server/.../physical_io/whole_file.rs</div>
+      <div class="desc">hashbg/ 命名空间路径布局与 WholeFileIo 抽象。</div>
+    </div>
+    <div class="file-card">
+      <div class="path">curvine-server/.../handler/hash_{read,write,delete}_handler.rs</div>
+      <div class="desc"><span class="badge new">新增</span>Hash RPC 流式 handler；write handler Drop 兜底 abort 防账本泄漏。</div>
+    </div>
+  </div>
+
+  <div class="callout edge">
+    <strong>Handler 复用协议</strong>
+    Hash RPC handler 可在同一连接上复用状态（context 存 open 句柄）；但 regular RPC 的 Complete/Cancel 必须自包含解析 context——interleave test 覆盖了这一点。
+  </div>
+
+  <pre>// hash_bg_store.rs 模块头注释 — 设计契约
+// 写：UUID object → stream → validate len → rename → catalog publish (last-commit-wins)
+// 删/覆盖：metadata-first → retire queue → 后台 unlink
+// 读：catalog 解析 path，校验存在与长度（checksum 留给未来 scrub）</pre>
+</section>
+
+<section id="code-gc-cap">
+  <h3>GC 与容量分账</h3>
+  <p><code>WorkerBackground</code> 注册两个互补任务：</p>
+  <ul>
+    <li><strong>hash-bg-retire-reclaim</strong>：消费持久化 retire 队列，grace 期后 unlink + 释放 hash_final 账本。</li>
+    <li><strong>hash-bg-orphan-sweep</strong>：扫描 hashbg/ 目录，清理 crash/race 漏网的 orphan（慢速兜底）。</li>
+  </ul>
+
+  <p>容量设计第一版：</p>
+  <ul>
+    <li><code>VfsDir</code> 增加 <code>hash_tmp_bytes</code> / <code>hash_final_bytes</code> 双桶；<code>fs_used()</code> 四桶求和，heartbeat 自动看到 HashBG 占用。</li>
+    <li>写 open 时 <code>reserve_hash_space</code> + <code>hash_budget</code> 准入；commit/abort/Drop 对称 release。</li>
+    <li>启动 <code>recover_hash_accounting()</code> 扫描 catalog 重建 hash_final。</li>
+    <li>LRU 淘汰钩子（catalog touch + 水位触发）——部分逻辑在容量 PR 落地。</li>
+  </ul>
+
+  <div class="diagram">
+    <div class="diagram-title">容量生命周期（单块 1MB 写）</div>
+    <div class="flow-row">
+      <span class="node meta">open: hash_tmp += 1MB</span>
+      <span class="arrow">→</span>
+      <span class="node meta">commit: tmp−1MB, final+=1MB</span>
+      <span class="arrow">→</span>
+      <span class="node meta">retire+unlink: final−1MB</span>
+    </div>
+  </div>
+</section>
+
+</main>
+</div>
+</body>
+</html>
