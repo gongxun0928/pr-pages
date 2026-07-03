@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HashBG P1 Worker Foundation Contracts — Diff Explanation</title>
+<style>
+:root {
+  --bg: #f7f5f0;
+  --paper: #fffdf8;
+  --ink: #1d2433;
+  --muted: #667085;
+  --line: #dfd8ca;
+  --accent: #2f6fed;
+  --accent-soft: #e9f0ff;
+  --green: #1a7f37;
+  --red: #b42318;
+  --amber: #a15c07;
+  --code-bg: #111827;
+  --code-ink: #f8fafc;
+  --shadow: 0 18px 45px rgba(29, 36, 51, 0.08);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: radial-gradient(circle at top left, #eef4ff, transparent 32rem), var(--bg);
+  color: var(--ink);
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  line-height: 1.65;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.header {
+  padding: 4rem 1.25rem 2.5rem;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(135deg, rgba(255,255,255,0.85), rgba(248,250,252,0.75));
+}
+.header-inner, main {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.eyebrow {
+  color: var(--accent);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+h1 {
+  margin: 0.7rem 0 0.75rem;
+  max-width: 940px;
+  font-size: clamp(2.2rem, 6vw, 5rem);
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+}
+.subtitle {
+  max-width: 850px;
+  margin: 0;
+  color: #344054;
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+}
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 2rem;
+}
+.meta-card {
+  background: rgba(255,255,255,0.78);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 1rem;
+  box-shadow: var(--shadow);
+}
+.meta-card strong {
+  display: block;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.meta-card span {
+  display: block;
+  margin-top: 0.35rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.92rem;
+}
+main { padding: 2rem 1.25rem 5rem; }
+.layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 2rem;
+  align-items: start;
+}
+.toc {
+  position: sticky;
+  top: 1rem;
+  background: rgba(255,253,248,0.92);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 1rem;
+  box-shadow: var(--shadow);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.toc h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.92rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.toc ol {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+.toc li { margin: 0.45rem 0; }
+.article {
+  min-width: 0;
+}
+section {
+  margin-bottom: 2rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  box-shadow: var(--shadow);
+}
+h2 {
+  margin: 0 0 1rem;
+  font-size: clamp(1.55rem, 3vw, 2.35rem);
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+}
+h3 {
+  margin-top: 1.6rem;
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
+}
+.lede {
+  font-size: 1.1rem;
+  color: #344054;
+}
+.callout {
+  margin: 1.2rem 0;
+  padding: 1rem 1.1rem;
+  border-left: 5px solid var(--accent);
+  border-radius: 14px;
+  background: var(--accent-soft);
+}
+.callout strong { font-family: ui-sans-serif, system-ui, sans-serif; }
+.callout.warn {
+  border-left-color: var(--amber);
+  background: #fff7ed;
+}
+.callout.good {
+  border-left-color: var(--green);
+  background: #ecfdf3;
+}
+.diff-stat {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin: 1.25rem 0;
+}
+.stat {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 1rem;
+  background: #fff;
+  text-align: center;
+}
+.stat b {
+  display: block;
+  font-size: 1.45rem;
+  color: var(--accent);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.stat span {
+  color: var(--muted);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.86rem;
+}
+.diagram {
+  margin: 1.5rem 0;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: #fff;
+  padding: 1rem;
+  overflow-x: auto;
+}
+.diagram-title {
+  margin-bottom: 0.8rem;
+  color: var(--muted);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.flow {
+  display: flex;
+  align-items: stretch;
+  gap: 0.75rem;
+  min-width: 640px;
+}
+.box {
+  flex: 1;
+  min-width: 145px;
+  border: 1px solid #cfd7e6;
+  border-radius: 18px;
+  background: #f8fbff;
+  padding: 0.85rem;
+  text-align: center;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.box strong { display: block; color: #1f3b70; }
+.box small { display: block; margin-top: 0.35rem; color: var(--muted); }
+.arrow {
+  display: flex;
+  align-items: center;
+  color: var(--accent);
+  font-weight: 900;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 1rem;
+  background: #fff;
+}
+.panel h3 { margin-top: 0; }
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.layer {
+  border: 1px solid #d0d5dd;
+  border-radius: 16px;
+  padding: 0.75rem 0.9rem;
+  background: #f9fafb;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.layer.accent { background: #eef4ff; border-color: #b2ccff; }
+.layer.green { background: #ecfdf3; border-color: #abefc6; }
+.layer.warn { background: #fff7ed; border-color: #fed7aa; }
+.file-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.file-card {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 1rem;
+  background: #fff;
+}
+.file-card h4 {
+  margin: 0 0 0.4rem;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.file-card p { margin: 0.35rem 0; }
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #f2f4f7;
+  color: #475467;
+  font-size: 0.78rem;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+pre {
+  margin: 1rem 0;
+  padding: 1rem;
+  border-radius: 16px;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.inline-code {
+  background: #f2f4f7;
+  border: 1px solid #eaecf0;
+  border-radius: 6px;
+  padding: 0.08rem 0.32rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.92em;
+}
+.quiz-card {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 1rem;
+  background: #fff;
+  margin: 1rem 0;
+}
+.quiz-card h3 { margin-top: 0; }
+.option {
+  display: block;
+  width: 100%;
+  margin: 0.55rem 0;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #d0d5dd;
+  border-radius: 14px;
+  background: #f9fafb;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.option:hover { background: #eef4ff; border-color: #84adff; }
+.option.correct { background: #ecfdf3; border-color: #17b26a; }
+.option.wrong { background: #fef3f2; border-color: #f97066; }
+.feedback {
+  min-height: 1.4rem;
+  margin-top: 0.65rem;
+  color: #344054;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.risk-list li { margin-bottom: 0.55rem; }
+.footer-note {
+  color: var(--muted);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.9rem;
+}
+@media (max-width: 860px) {
+  .layout { grid-template-columns: 1fr; }
+  .toc { position: static; }
+  .meta-grid, .diff-stat, .compare, .file-grid { grid-template-columns: 1fr; }
+  .header { padding-top: 2.5rem; }
+}
+</style>
+</head>
+<body><div class="pr-header" style="max-width:1100px;margin:0 auto;padding:2rem 1.25rem 1rem;">
+  <h1 style="margin:0 0 0.5rem;font-size:2rem;letter-spacing:-0.03em;">PR #50: refactor(worker): add HashBG foundation contracts</h1>
+  <p style="color:#344054;font-size:1.1rem;margin:0 0 1rem;">Refactor worker block storage into layered PhysicalDataset + RegularBlockStore + RegularBlockCatalog and add HashBG common contracts (topology, proto, RPC codes, error types).</p>
+  <div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1rem;">
+    <span style="background:#f2f4f7;padding:0.3rem 0.6rem;border-radius:8px;font-family:ui-sans-serif,system-ui,sans-serif;font-size:0.85rem;"><strong>Repo</strong>: CurvineIO/curvine-max</span>
+    <span style="background:#f2f4f7;padding:0.3rem 0.6rem;border-radius:8px;font-family:ui-sans-serif,system-ui,sans-serif;font-size:0.85rem;"><strong>Branch</strong>: codex/hashbg-p1-worker-foundation-contracts</span>
+    <span style="background:#f2f4f7;padding:0.3rem 0.6rem;border-radius:8px;font-family:ui-sans-serif,system-ui,sans-serif;font-size:0.85rem;"><strong>Files</strong>: 20</span>
+    <span style="background:#f2f4f7;padding:0.3rem 0.6rem;border-radius:8px;font-family:ui-sans-serif,system-ui,sans-serif;font-size:0.85rem;"><strong>+/-</strong>: 1598/754</span>
+  </div>
+  <button onclick="navigator.clipboard.writeText(document.getElementById('snippet').textContent)" style="background:#2f6fed;color:#fff;border:none;border-radius:10px;padding:0.5rem 1rem;font-size:0.9rem;cursor:pointer;font-family:ui-sans-serif,system-ui,sans-serif;">Copy PR Snippet</button>
+  <textarea id="snippet" style="display:none">## What
+
+Refactor worker block storage into layered PhysicalDataset + RegularBlockStore + RegularBlockCatalog and add HashBG common contracts.
+
+## Why
+
+The old VfsDataset bundled physical resource management and regular-block catalog into one RwLock-guarded object, making it impossible to add HashBG cache blocks without polluting the regular-block catalog.
+
+📖 **Full description with diagrams**: https://gongxun0928.github.io/pr-pages/CurvineIO/curvine-max/pr/50/
+
+## Self-Review Checklist
+
+- [ ] Tests added or updated
+- [ ] Edge cases handled (see linked description)
+- [ ] No breaking changes (or breaking changes documented in linked description)
+- [ ] Manual testing completed</textarea>
+</div>
+<header class="header">
+  <div class="header-inner">
+    <div class="eyebrow">Curvine HashBG P1 Diff Explanation</div>
+    <h1>Worker foundation before the cache</h1>
+    <p class="subtitle">An interactive walkthrough of <code>codex/hashbg-p1-worker-foundation-contracts</code> relative to <code>codex/hashbg-p0-design-docs</code>. The branch does not implement HashBG IO yet; it prepares the worker block layer and shared contracts so later PRs have a clean place to land.</p>
+    <div class="meta-grid">
+      <div class="meta-card"><strong>Base</strong><span>codex/hashbg-p0-design-docs</span></div>
+      <div class="meta-card"><strong>Head</strong><span>codex/hashbg-p1-worker-foundation-contracts</span></div>
+      <div class="meta-card"><strong>Commit</strong><span>6b3cee8</span></div>
+      <div class="meta-card"><strong>Diff size</strong><span>20 files, +1598/-754</span></div>
+    </div>
+  </div>
+</header>
+<main>
+  <div class="layout">
+    <nav class="toc" aria-label="Table of contents">
+      <h2>Contents</h2>
+      <ol>
+        <li><a href="#background">Background</a></li>
+        <li><a href="#intuition">Intuition</a></li>
+        <li><a href="#code">Code walkthrough</a></li>
+        <li><a href="#risks">Review risks</a></li>
+        <li><a href="#quiz">Quiz</a></li>
+      </ol>
+    </nav>
+    <article class="article">
+      <section id="background">
+        <h2>1. Background</h2>
+        <p class="lede">A storage refactor is easiest to understand if we first separate two ideas that often get bundled together: the physical place where bytes live, and the logical catalog that says which block owns those bytes.</p>
+        <h3>1.1 The beginner's picture: Master, Worker, and blocks</h3>
+        <p>Curvine splits files into blocks. The Master is the metadata and scheduling authority. Workers store the actual bytes. When a client writes a file block, the broad story is:</p>
+        <div class="diagram">
+          <div class="diagram-title">Regular block write flow</div>
+          <div class="flow">
+            <div class="box"><strong>Client</strong><small>wants to write block 100</small></div>
+            <div class="arrow">→</div>
+            <div class="box"><strong>Master</strong><small>allocates block and target worker</small></div>
+            <div class="arrow">→</div>
+            <div class="box"><strong>Worker RPC</strong><small>receives bytes</small></div>
+            <div class="arrow">→</div>
+            <div class="box"><strong>Local storage</strong><small>file-backed dir or SPDK bdev</small></div>
+            <div class="arrow">→</div>
+            <div class="box"><strong>Heartbeat</strong><small>reports storage and block state</small></div>
+          </div>
+        </div>
+        <p>The worker is therefore both a byte store and a reporting agent. It must know where bytes are placed, how much capacity is used, which storage directories have failed, and which block ids are currently present.</p>
+        <h3>1.2 Data dirs and SPDK</h3>
+        <p>A worker has configured data dirs. A data dir may be a normal file-backed directory such as MEM, SSD, HDD, or DISK. It may also be <span class="inline-code">StorageType::SpdkDisk</span>, which is very different: the block is not a normal file, but a byte range on an SPDK bdev.</p>
+        <div class="compare">
+          <div class="panel">
+            <h3>File-backed block</h3>
+            <ul>
+              <li>Has a local path such as <span class="inline-code">active/.../blk_100</span>.</li>
+              <li>Deletion can unlink a file.</li>
+              <li>Length can be checked with filesystem metadata.</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>SPDK block</h3>
+            <ul>
+              <li>Has a bdev name and byte offset.</li>
+              <li>Deletion releases an offset range.</li>
+              <li>Metadata must be persisted in <span class="inline-code">SpdkMetaStore</span>.</li>
+            </ul>
+          </div>
+        </div>
+        <p>The common runtime record for a regular worker block is <span class="inline-code">BlockMeta</span>. It records the block id, length, state, owning directory, actual length, and optional SPDK offset.</p>
+        <pre><code>BlockMeta {
+    id: 100,
+    len: 67108864,
+    state: BlockState::Finalized,
+    dir: Arc&lt;DirState&gt;,
+    actual_len: 67108864,
+    bdev_offset: -1,
+}</code></pre>
+        <h3>1.3 The narrow background: why the old Dataset shape became awkward</h3>
+        <p>Before this branch, the worker storage model centered on a <span class="inline-code">Dataset</span> trait and a <span class="inline-code">VfsDataset</span> implementation. That object carried two responsibilities at once.</p>
+        <div class="diagram">
+          <div class="diagram-title">Old shape: one object with two meanings</div>
+          <div class="stack">
+            <div class="layer accent"><strong>BlockStore</strong> holds <span class="inline-code">Arc&lt;RwLock&lt;BlockDataset&gt;&gt;</span></div>
+            <div class="layer warn"><strong>VfsDataset as physical resource manager</strong>: data dirs, SPDK metadata, recovery, capacity</div>
+            <div class="layer warn"><strong>VfsDataset as logical catalog</strong>: <span class="inline-code">HashMap&lt;i64, BlockMeta&gt;</span>, open/finalize/abort/remove regular blocks</div>
+          </div>
+        </div>
+        <p>This is workable for regular blocks, because a regular block is keyed by an <span class="inline-code">i64</span> block id. HashBG read cache needs a different key: purpose, BG id, logical file block, and block version. Extending the old dataset would force a regular-block catalog to pretend it also understands HashBG.</p>
+        <div class="callout warn"><strong>Important distinction.</strong> P1 is not the branch that makes workers read or write HashBG cache. It creates the foundation: common contracts plus a worker storage split that makes such support possible later.</div>
+        <div class="diff-stat">
+          <div class="stat"><b>20</b><span>files changed</span></div>
+          <div class="stat"><b>1598</b><span>lines added</span></div>
+          <div class="stat"><b>754</b><span>lines removed</span></div>
+          <div class="stat"><b>0</b><span>HashBG IO handlers</span></div>
+        </div>
+      </section>
+      <section id="intuition">
+        <h2>2. Intuition</h2>
+        <p class="lede">The essence of this change is to stop asking one object to be both the warehouse and the card catalog.</p>
+        <div class="compare">
+          <div class="panel">
+            <h3>Before</h3>
+            <div class="stack">
+              <div class="layer accent">BlockStore</div>
+              <div class="layer warn">VfsDataset</div>
+              <div class="layer">data dirs</div>
+              <div class="layer">SPDK offsets</div>
+              <div class="layer">capacity</div>
+              <div class="layer">regular block map</div>
+              <div class="layer">regular lifecycle</div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>After P1</h3>
+            <div class="stack">
+              <div class="layer accent">BlockStore facade</div>
+              <div class="layer green">PhysicalDataset: physical resources</div>
+              <div class="layer green">RegularBlockStore: regular lifecycle</div>
+              <div class="layer green">RegularBlockCatalog: block id to BlockMeta</div>
+              <div class="layer warn">HashBG contracts: future keys, routes, errors, RPC codes</div>
+            </div>
+          </div>
+        </div>
+        <h3>2.1 A toy regular-block example</h3>
+        <p>Suppose the client writes regular block <span class="inline-code">100</span>, expected length 64 MiB. The old implementation did the physical allocation and the logical catalog mutation inside <span class="inline-code">VfsDataset</span>. The new implementation sends the same operation through clearer components.</p>
+        <div class="diagram">
+          <div class="diagram-title">New regular block path</div>
+          <div class="flow">
+            <div class="box"><strong>BlockStore.open_block</strong><small>stable facade API</small></div>
+            <div class="arrow">→</div>
+            <div class="box"><strong>RegularBlockStore</strong><small>orchestrates lifecycle</small></div>
+            <div class="arrow">→</div>
+            <div class="box"><strong>PhysicalDataset</strong><small>chooses dir / SPDK range</small></div>
+            <div class="arrow">→</div>
+            <div class="box"><strong>RegularBlockCatalog</strong><small>records 100 → BlockMeta</small></div>
+          </div>
+        </div>
+        <p>The behavior remains regular-block behavior. The improvement is that later HashBG work can introduce a separate catalog without bending the regular-block map into a different shape.</p>
+        <h3>2.2 A toy HashBG example</h3>
+        <p>Imagine a file with inode <span class="inline-code">42</span>. A read at offset 128 MiB with 64 MiB blocks maps to file block index <span class="inline-code">2</span>. If the file version is <span class="inline-code">7</span>, the logical id is:</p>
+        <pre><code>LogicalBlockId {
+    inode_id: 42,
+    block_index: 2,
+    f_version: 7,
+}</code></pre>
+        <p>The future HashBG key is not a simple <span class="inline-code">i64</span>. It includes purpose and BG routing information:</p>
+        <pre><code>HashBlockKey {
+    purpose: BlockPurpose::ReadCache,
+    bg_id: hash(42, 2) % bg_count,
+    block_id: LogicalBlockId { inode_id: 42, block_index: 2, f_version: 7 },
+    block_version: 0,
+}</code></pre>
+        <div class="callout good"><strong>The key intuition.</strong> P1 creates room for two logical worlds to share the same physical worker resources: regular Curvine blocks and future HashBG cache blocks.</div>
+      </section>
+      <section id="code">
+        <h2>3. Code walkthrough</h2>
+        <p class="lede">The branch is best read in five groups: common contracts, physical storage split, regular block catalog/store, BlockStore facade, and observability adaptation.</p>
+        <h3>3.1 Common contracts: proto, topology, errors, RPC codes</h3>
+        <div class="file-grid">
+          <div class="file-card"><h4>common.proto</h4><p><span class="badge">wire contract</span></p><p>Adds <span class="inline-code">LogicalBlockIdProto</span> with <span class="inline-code">inode_id</span>, <span class="inline-code">block_index</span>, and <span class="inline-code">f_version</span>.</p></div>
+          <div class="file-card"><h4>worker.proto</h4><p><span class="badge">future RPC payloads</span></p><p>Adds Hash block write/read/delete request and response messages.</p></div>
+          <div class="file-card"><h4>topology/cluster_view.rs</h4><p><span class="badge">routing model</span></p><p>Adds <span class="inline-code">LogicalBlockId</span>, <span class="inline-code">HashBlockKey</span>, <span class="inline-code">BgPlacement</span>, <span class="inline-code">HashBgRouter</span>, and <span class="inline-code">ClusterView</span>.</p></div>
+          <div class="file-card"><h4>fs_error.rs + rpc_code.rs</h4><p><span class="badge">client semantics</span></p><p>Adds HashBG-specific read errors and reserved RPC codes <span class="inline-code">84</span>, <span class="inline-code">85</span>, <span class="inline-code">86</span>.</p></div>
+        </div>
+        <pre><code>RpcCode::WriteHashBlock = 84
+RpcCode::ReadHashBlock = 85
+RpcCode::DeleteHashBlock = 86</code></pre>
+        <p>The important thing is that these are contracts. P1 does not yet connect them to worker handlers.</p>
+        <h3>3.2 Worker storage refactor: from VfsDataset to PhysicalDataset</h3>
+        <p>The old <span class="inline-code">Dataset</span> trait and <span class="inline-code">VfsDataset</span> implementation are removed. Their physical-resource responsibilities move into <span class="inline-code">PhysicalDataset</span>.</p>
+        <div class="diagram">
+          <div class="diagram-title">PhysicalDataset owns physical resources, not logical block identity</div>
+          <div class="flow">
+            <div class="box"><strong>PhysicalDataset</strong><small>data dirs, SPDK meta, capacity, recovery</small></div>
+            <div class="arrow">↔</div>
+            <div class="box"><strong>DirList / VfsDir</strong><small>choose dir, check health, reserve bytes</small></div>
+            <div class="arrow">↔</div>
+            <div class="box"><strong>SPDK metadata</strong><small>bdev offset records</small></div>
+          </div>
+        </div>
+        <p>One subtle change is in <span class="inline-code">DirList::choose_dir</span>. It now takes <span class="inline-code">&amp;self</span>, and the mutable round-robin state moves behind a <span class="inline-code">Mutex&lt;ChoosingPolicy&gt;</span>. That lets <span class="inline-code">PhysicalDataset</span> be shared by <span class="inline-code">Arc</span> while still preserving choice state.</p>
+        <h3>3.3 RegularBlockStore and RegularBlockCatalog</h3>
+        <p>Regular block identity moves into a dedicated catalog:</p>
+        <pre><code>pub struct RegularBlockCatalog {
+    blocks: HashMap&lt;i64, BlockMeta&gt;,
+    num_blocks_to_delete: AtomicUsize,
+}</code></pre>
+        <p>The lifecycle logic moves into <span class="inline-code">RegularBlockStore</span>:</p>
+        <pre><code>pub struct RegularBlockStore {
+    dataset: Arc&lt;PhysicalDataset&gt;,
+    catalog: RwLock&lt;RegularBlockCatalog&gt;,
+}</code></pre>
+        <p>This store orchestrates open, finalize, abort, remove, async remove, and recovery-backed initialization. It is the place where catalog mutation and physical operations meet.</p>
+        <h3>3.4 BlockStore becomes a facade</h3>
+        <p>External worker code still talks to <span class="inline-code">BlockStore</span>, but the internals change from one locked dataset to two dedicated collaborators.</p>
+        <pre><code>pub struct BlockStore {
+    dataset: Arc&lt;PhysicalDataset&gt;,
+    regular: Arc&lt;RegularBlockStore&gt;,
+}</code></pre>
+        <p>That facade keeps existing regular-block APIs stable while giving future PRs a natural place to attach <span class="inline-code">HashBgBlockStore</span>.</p>
+        <h3>3.5 Heartbeat and metrics stop peeking into Dataset</h3>
+        <p>Heartbeat and metrics previously depended on direct dataset access. This branch introduces <span class="inline-code">BlockStoreStats</span> and <span class="inline-code">BlockStore::stats()</span>, so observability code reads an aggregate view instead of knowing the storage implementation.</p>
+        <pre><code>pub struct BlockStoreStats {
+    pub capacity: i64,
+    pub available: i64,
+    pub fs_used: i64,
+    pub num_blocks: usize,
+    pub num_blocks_to_delete: usize,
+    pub failed_dirs: usize,
+    pub total_dirs: usize,
+}</code></pre>
+        <p>This is a small but important boundary: once there are multiple catalogs, metrics can still be produced through a facade-level snapshot.</p>
+      </section>
+      <section id="risks">
+        <h2>4. Review risks</h2>
+        <p class="lede">This branch is mostly structural. The main risk is not that it implements the wrong HashBG behavior; it is that it accidentally changes regular-block behavior while making room for HashBG.</p>
+        <ul class="risk-list">
+          <li><strong>Regular block equivalence.</strong> Review open, finalize, abort, remove, async remove, startup recovery, SPDK metadata updates, and capacity accounting for behavioral parity with the deleted <span class="inline-code">VfsDataset</span>.</li>
+          <li><strong>Recovery must not double count.</strong> <span class="inline-code">PhysicalDataset::recover_blocks()</span> feeds <span class="inline-code">RegularBlockStore</span> initialization. Future stores must not call it in ways that duplicate accounting.</li>
+          <li><strong>Locking changed.</strong> The old coarse <span class="inline-code">Arc&lt;RwLock&lt;VfsDataset&gt;&gt;</span> becomes catalog locks, a choosing-policy mutex, and atomic counters. Check mutation boundaries carefully.</li>
+          <li><strong>Pending delete counter semantics.</strong> <span class="inline-code">num_blocks_to_delete</span> moved into <span class="inline-code">RegularBlockCatalog</span>. Missing-block paths should be reviewed for counter balance.</li>
+          <li><strong>Contracts are not handlers.</strong> The branch declares HashBG proto messages and RPC codes, but worker handlers still do not process Hash block RPCs.</li>
+          <li><strong>Static topology is scaffolding.</strong> <span class="inline-code">ClusterView::static_three_workers()</span> is useful for the early stack, but should not be mistaken for production topology delivery.</li>
+          <li><strong>Hashing intentionally ignores f_version.</strong> BG routing uses inode and block index, not file version, so different file versions land in the same BG.</li>
+          <li><strong>HashBlockCorrupt is retryable.</strong> That is sensible for cache replicas, but reviewers should confirm it matches later fallback semantics.</li>
+          <li><strong>HashBG placement excludes SPDK.</strong> <span class="inline-code">hash_bg_placement</span> selects file-backed dirs only in phase 1.</li>
+        </ul>
+      </section>
+      <section id="quiz">
+        <h2>5. Quiz</h2>
+        <p class="lede">If you can answer these questions, you have understood the branch well enough to review it productively.</p>
+        <div class="quiz-card" data-answer="1">
+          <h3>1. Why introduce <code>PhysicalDataset</code> instead of extending the old <code>VfsDataset</code>?</h3>
+          <button class="option">Because renaming <code>VfsDataset</code> improves performance.</button>
+          <button class="option">Because physical resource management should be separated from logical catalogs, so HashBG does not have to reuse regular block's <code>HashMap&lt;i64, BlockMeta&gt;</code>.</button>
+          <button class="option">Because <code>PhysicalDataset</code> persists all block metadata to RocksDB.</button>
+          <button class="option">Because heartbeat no longer needs storage information.</button>
+          <div class="feedback"></div>
+        </div>
+        <div class="quiz-card" data-answer="2">
+          <h3>2. In the new structure, who coordinates regular block catalog updates and physical allocation?</h3>
+          <button class="option"><code>PhysicalDataset</code></button>
+          <button class="option"><code>RegularBlockCatalog</code></button>
+          <button class="option"><code>RegularBlockStore</code></button>
+          <button class="option"><code>WorkerMetrics</code></button>
+          <div class="feedback"></div>
+        </div>
+        <div class="quiz-card" data-answer="1">
+          <h3>3. Which fields make up <code>LogicalBlockId</code>?</h3>
+          <button class="option"><code>worker_id</code>, <code>dir_id</code>, <code>block_id</code></button>
+          <button class="option"><code>inode_id</code>, <code>block_index</code>, <code>f_version</code></button>
+          <button class="option"><code>bg_id</code>, <code>offset</code>, <code>len</code></button>
+          <button class="option"><code>storage_type</code>, <code>block_size</code>, <code>replicas</code></button>
+          <div class="feedback"></div>
+        </div>
+        <div class="quiz-card" data-answer="3">
+          <h3>4. When aborting or removing an SPDK block, which action should not happen?</h3>
+          <button class="option">Remove <code>BlockMeta</code> from the regular catalog.</button>
+          <button class="option">Release the offset in <code>BdevOffsetAllocator</code>.</button>
+          <button class="option">Delete the record from <code>SpdkMetaStore</code>.</button>
+          <button class="option">Unlink a local filesystem file named <code>blk_&lt;id&gt;</code>.</button>
+          <div class="feedback"></div>
+        </div>
+        <div class="quiz-card" data-answer="2">
+          <h3>5. After P1 adds <code>WriteHashBlock</code>, <code>ReadHashBlock</code>, and <code>DeleteHashBlock</code>, does the worker fully support those RPCs?</h3>
+          <button class="option">Yes, <code>BlockHandler</code> now handles all Hash block RPCs.</button>
+          <button class="option">Yes, but only for SPDK-backed cache.</button>
+          <button class="option">No. P1 adds common contracts and worker storage foundation; Hash block handler wiring belongs to a later PR.</button>
+          <button class="option">No, because the proto messages are not defined.</button>
+          <div class="feedback"></div>
+        </div>
+      </section>
+      <p class="footer-note">Generated for local review. Compare range: <code>codex/hashbg-p0-design-docs...codex/hashbg-p1-worker-foundation-contracts</code>.</p>
+    </article>
+  </div>
+</main>
+<script>
+const explanations = [
+  [
+    "Not quite. This branch is structural, not a simple rename for speed.",
+    "Correct. Physical resources and logical catalogs have different responsibilities; separating them makes room for HashBG.",
+    "Not quite. SPDK metadata is persisted, but PhysicalDataset is not a universal RocksDB catalog.",
+    "Not quite. Heartbeat still needs storage information, but it gets it through the facade."
+  ],
+  [
+    "Not quite. PhysicalDataset chooses and manages physical resources, but it does not own the regular block catalog.",
+    "Not quite. The catalog stores the map, but it does not orchestrate physical allocation.",
+    "Correct. RegularBlockStore is the orchestrator that combines catalog mutation with physical operations.",
+    "Not quite. Metrics only observes aggregate state."
+  ],
+  [
+    "Not quite. Those are worker-local storage identifiers, not file logical identity.",
+    "Correct. LogicalBlockId identifies the file logical block and version.",
+    "Not quite. bg_id is derived from routing, while offset and len are request-range concepts.",
+    "Not quite. Those are placement or replication properties."
+  ],
+  [
+    "This can happen as part of removing the logical record.",
+    "This should happen so the SPDK byte range can be reused.",
+    "This should happen so restart recovery does not resurrect deleted SPDK metadata.",
+    "Correct. SPDK blocks are byte ranges on a bdev, not ordinary blk files in a filesystem directory."
+  ],
+  [
+    "Not quite. The handler wiring is not in P1.",
+    "Not quite. P1 explicitly keeps HashBG phase 1 file-backed, and does not implement the RPC handlers.",
+    "Correct. This branch declares contracts and prepares worker storage layering; full HashBG IO lands later.",
+    "Not quite. The proto messages are defined in this branch."
+  ]
+];
+document.querySelectorAll('.quiz-card').forEach((card, cardIndex) => {
+  const answer = Number(card.dataset.answer);
+  const buttons = Array.from(card.querySelectorAll('.option'));
+  const feedback = card.querySelector('.feedback');
+  buttons.forEach((button, optionIndex) => {
+    button.addEventListener('click', () => {
+      buttons.forEach(b => b.classList.remove('correct', 'wrong'));
+      if (optionIndex === answer) {
+        button.classList.add('correct');
+        feedback.textContent = explanations[cardIndex][optionIndex];
+      } else {
+        button.classList.add('wrong');
+        buttons[answer].classList.add('correct');
+        feedback.textContent = explanations[cardIndex][optionIndex];
+      }
+    });
+  });
+});
+</script>
+</body>
+</html>
