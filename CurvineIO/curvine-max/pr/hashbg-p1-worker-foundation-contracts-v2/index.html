@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PR: refactor(worker): add HashBG foundation contracts</title>
+<style>
+:root {
+  --bg: #f6f8fa;
+  --card: #ffffff;
+  --text: #1f2328;
+  --muted: #656d76;
+  --border: #d0d7de;
+  --border-light: #eaeef2;
+  --accent: #0969da;
+  --accent-light: #ddf4ff;
+  --green: #1a7f37;
+  --green-light: #dafbe1;
+  --amber: #9a6700;
+  --amber-light: #fff8c5;
+  --red: #cf222e;
+  --red-light: #ffebe9;
+  --code-bg: #f6f8fa;
+  --sidebar-w: 240px;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.65;
+}
+
+/* ===== Layout: sidebar + content ===== */
+.layout { display: flex; align-items: flex-start; }
+
+/* Sticky sidebar ToC */
+.toc {
+  width: var(--sidebar-w); flex-shrink: 0;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: var(--card); border-right: 1px solid var(--border);
+  padding: 24px 16px; font-size: 0.85rem;
+}
+.toc h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 12px; }
+.toc ul { list-style: none; }
+.toc li { margin-bottom: 2px; }
+.toc a {
+  display: block; padding: 6px 10px; border-radius: 6px;
+  color: var(--text); text-decoration: none; transition: background 0.15s;
+}
+.toc a:hover { background: var(--accent-light); color: var(--accent); }
+.toc a.active { background: var(--accent-light); color: var(--accent); font-weight: 600; }
+
+/* Main content */
+.content { flex: 1; min-width: 0; padding: 32px 40px 80px; max-width: 820px; margin: 0 auto; }
+
+/* ===== Header card ===== */
+.header {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 32px 36px; margin-bottom: 24px; box-shadow: var(--shadow);
+}
+.header h1 { font-size: 1.55rem; font-weight: 700; line-height: 1.35; margin-bottom: 10px; }
+.header .summary-line { color: var(--muted); font-size: 1.02rem; margin-bottom: 20px; }
+.meta-grid {
+  display: flex; flex-wrap: wrap; gap: 8px 0; font-size: 0.82rem; color: var(--muted);
+}
+.meta-item { padding: 4px 14px; border-right: 1px solid var(--border); }
+.meta-item:last-child { border-right: none; }
+.meta-item strong { color: var(--text); }
+.copy-btn {
+  background: var(--accent); color: #fff; border: none;
+  padding: 9px 22px; border-radius: 8px; font-size: 0.85rem; font-weight: 500;
+  cursor: pointer; margin-top: 20px; transition: opacity 0.2s, transform 0.1s;
+}
+.copy-btn:hover { opacity: 0.88; }
+.copy-btn:active { transform: scale(0.97); }
+
+/* ===== Section cards ===== */
+.section {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 28px 32px; margin-bottom: 20px; box-shadow: var(--shadow); scroll-margin-top: 20px;
+}
+.section h2 { font-size: 1.2rem; font-weight: 650; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.section h3 { font-size: 1rem; font-weight: 600; margin: 20px 0 10px; color: var(--text); }
+.section p { margin-bottom: 12px; }
+.section ul, .section ol { margin-left: 22px; margin-bottom: 12px; }
+.section li { margin-bottom: 5px; }
+
+/* ===== Before & After ===== */
+.ba-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px; }
+.ba-card { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.ba-card-header { padding: 10px 16px; font-size: 0.82rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.ba-before .ba-card-header { background: var(--red-light); color: var(--red); border-bottom: 1px solid var(--border); }
+.ba-after .ba-card-header { background: var(--green-light); color: var(--green); border-bottom: 1px solid var(--border); }
+.ba-card-body { padding: 16px; }
+@media (max-width: 720px) { .ba-grid { grid-template-columns: 1fr; } }
+
+/* ===== Code blocks ===== */
+pre {
+  background: var(--code-bg); border: 1px solid var(--border-light); border-radius: 8px;
+  padding: 16px 18px; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+  font-size: 0.8rem; line-height: 1.55; font-family: "SF Mono","Fira Code","Consolas",monospace;
+  margin: 12px 0;
+}
+code { font-family: "SF Mono","Fira Code","Consolas",monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre code { background: none; padding: 0; }
+
+/* ===== CSS Diagrams ===== */
+.diagram {
+  background: var(--bg); border: 1px solid var(--border-light); border-radius: 8px;
+  padding: 24px 16px; margin: 16px 0; overflow-x: auto;
+}
+.diagram-row { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
+.dbox {
+  border: 2px solid var(--border); border-radius: 8px; padding: 10px 16px;
+  text-align: center; background: var(--card); font-size: 0.82rem; min-width: 120px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+.dbox small { display: block; color: var(--muted); font-size: 0.72rem; margin-top: 3px; }
+.dbox.accent { border-color: var(--accent); background: var(--accent-light); }
+.dbox.green { border-color: var(--green); background: var(--green-light); }
+.dbox.red { border-color: var(--red); background: var(--red-light); }
+.darrow { font-size: 1.3rem; color: var(--muted); user-select: none; }
+.darrow.down { display: block; text-align: center; margin: 2px 0; }
+.dlabel { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 4px 0; }
+
+/* ===== Callout ===== */
+.callout { border-radius: 8px; padding: 14px 18px; margin: 14px 0; font-size: 0.88rem; }
+.callout-title { font-weight: 700; margin-bottom: 6px; font-size: 0.82rem; }
+.callout.blue { background: var(--accent-light); border-left: 4px solid var(--accent); }
+.callout.blue .callout-title { color: var(--accent); }
+.callout.amber { background: var(--amber-light); border-left: 4px solid var(--amber); }
+.callout.amber .callout-title { color: var(--amber); }
+.callout.green { background: var(--green-light); border-left: 4px solid var(--green); }
+.callout.green .callout-title { color: var(--green); }
+
+/* ===== File table ===== */
+.file-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin: 12px 0; }
+.file-table th { text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--border); font-weight: 600; color: var(--muted); }
+.file-table td { padding: 7px 12px; border-bottom: 1px solid var(--border-light); }
+.file-table tr:hover td { background: var(--code-bg); }
+.added { color: var(--green); font-weight: 600; }
+.removed { color: var(--red); font-weight: 600; }
+.tag { display: inline-block; font-size: 0.68rem; padding: 2px 7px; border-radius: 4px; font-weight: 600; }
+.tag.new { background: var(--green-light); color: var(--green); }
+.tag.del { background: var(--red-light); color: var(--red); }
+.tag.mod { background: var(--accent-light); color: var(--accent); }
+
+/* ===== Test steps ===== */
+.test-step { display: flex; gap: 12px; margin: 12px 0; align-items: flex-start; }
+.test-num { flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 0.78rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.test-body { flex: 1; }
+
+footer { text-align: center; color: var(--muted); font-size: 0.78rem; padding: 24px 0; }
+
+/* ===== Mobile ===== */
+@media (max-width: 720px) {
+  .layout { flex-direction: column; }
+  .toc {
+    position: static; width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border);
+    padding: 12px 16px; max-height: 200px;
+  }
+  .content { padding: 20px 16px 60px; }
+  .header, .section { padding: 20px; }
+  .meta-item { border-right: none; }
+}
+
+/* Smooth scroll */
+html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<!-- ===== Sticky Sidebar ToC ===== -->
+<nav class="toc" id="toc">
+  <h3>Contents</h3>
+  <ul>
+    <li><a href="#summary">Summary</a></li>
+    <li><a href="#before-after">Before &amp; After</a></li>
+    <li><a href="#how-it-works">How It Works</a></li>
+    <li><a href="#code-walkthrough">Code Walkthrough</a></li>
+    <li><a href="#how-to-test">How to Test</a></li>
+  </ul>
+</nav>
+
+<!-- ===== Main Content ===== -->
+<div class="content">
+
+<!-- HEADER -->
+<div class="header">
+  <h1>refactor(worker): add HashBG foundation contracts</h1>
+  <p class="summary-line">Introduce HashBG block-group routing contracts, split worker storage into physical/logical layers, and add proto definitions for hash-based block RPCs.</p>
+  <div class="meta-grid">
+    <div class="meta-item"><strong>Repo:</strong> CurvineIO/curvine-max</div>
+    <div class="meta-item"><strong>Branch:</strong> codex/hashbg-p1-worker-foundation-contracts</div>
+    <div class="meta-item"><strong>Target:</strong> main</div>
+    <div class="meta-item"><strong>Files:</strong> 22</div>
+    <div class="meta-item"><span class="added">+2022</span> <span class="removed">−754</span></div>
+  </div>
+  <button class="copy-btn" onclick="copySnippet()">Copy PR Snippet</button>
+</div>
+
+<!-- SUMMARY -->
+<div class="section" id="summary">
+  <h2>Summary</h2>
+  <p>This PR lays the foundation for <strong>HashBG</strong> (Hash Block Group) — a hash-based block
+  routing system for the Curvine distributed filesystem. It introduces the core contracts that future
+  PRs (P2–P6) will build upon: logical block identity, block-group placement, cluster topology view,
+  and proto-level RPC definitions for hash block write/read/delete operations.</p>
+  <p>Simultaneously, the worker's monolithic storage layer (<code>VfsDataset</code>) is split into a
+  physical layer (<code>PhysicalDataset</code>) and a logical catalog
+  (<code>RegularBlockCatalog</code>), orchestrated by <code>RegularBlockStore</code>. This separation
+  is critical: future HashBG block types (read cache, write buffer) will share the same physical
+  dataset but maintain their own logical indexes.</p>
+</div>
+
+<!-- BEFORE & AFTER -->
+<div class="section" id="before-after">
+  <h2>Before &amp; After</h2>
+  <div class="ba-grid">
+    <div class="ba-card ba-before">
+      <div class="ba-card-header">Before — Monolithic VfsDataset</div>
+      <div class="ba-card-body">
+        <pre>BlockStore
+  └── RwLock&lt;BlockDataset&gt;  // = VfsDataset
+        ├── dirs (DirList)
+        ├── block_map: HashMap&lt;i64, BlockMeta&gt;
+        ├── capacity counters
+        ├── SPDK offset alloc
+        ├── placement chooser
+        └── recovery scan
+
+// Single coarse RwLock gates:
+//   - catalog mutations
+//   - capacity accounting
+//   - SPDK metadata persistence
+//   - dir placement
+// No concept of "block purpose" or
+// hash-based routing.</pre>
+      </div>
+    </div>
+    <div class="ba-card ba-after">
+      <div class="ba-card-header">After — Layered Physical + Logical</div>
+      <div class="ba-card-body">
+        <pre>BlockStore
+  ├── Arc&lt;PhysicalDataset&gt;     // shared physical
+  │     ├── DirList (Mutex chooser)
+  │     ├── SPDK metadata store
+  │     └── capacity counters (atomics)
+  └── Arc&lt;RegularBlockStore&gt;   // orchestrator
+        ├── catalog: RwLock&lt;RegularBlockCatalog&gt;
+        │     └── HashMap&lt;i64, BlockMeta&gt;
+        └── PhysicalDataset ref
+
+// New topology module:
+//   LogicalBlockId (inode + index + version)
+//   ClusterView → BG routing
+//   HashBlockKey (purpose + bg + block + ver)
+//
+// Future: HashBG stores share the same
+// PhysicalDataset but own separate catalogs.</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HOW IT WORKS -->
+<div class="section" id="how-it-works">
+  <h2>How It Works</h2>
+  <p>The HashBG system divides the cluster into a fixed number of <strong>Block Groups (BGs)</strong>.
+  Each logical block is deterministically mapped to a BG via a stable hash, and each BG has a set of
+  worker replicas with a designated primary.</p>
+
+  <!-- CSS Diagram: Block Routing Flow -->
+  <div class="diagram">
+    <div class="dlabel">Block Routing Flow</div>
+    <div class="diagram-row">
+      <div class="dbox">LogicalBlockId<small>inode=42<br>index=1<br>ver=7</small></div>
+      <div class="darrow">→</div>
+      <div class="dbox accent">stable_hash()<small>splitmix64(inode)<br>^ splitmix64(index)</small></div>
+      <div class="darrow">→</div>
+      <div class="dbox">bg_id<small>hash % 32</small></div>
+      <div class="darrow">→</div>
+      <div class="dbox green">BgInfo<small>primary worker<br>+ replicas</small></div>
+    </div>
+    <div class="darrow down">⇅</div>
+    <div class="diagram-row">
+      <div class="dbox accent">HashBlockKey<small>purpose + bg_id<br>+ block_id + version</small></div>
+      <div class="darrow">→</div>
+      <div class="dbox">Worker RPC<small>WriteHashBlock<br>ReadHashBlock<br>DeleteHashBlock</small></div>
+    </div>
+  </div>
+
+  <!-- CSS Diagram: Worker Layering -->
+  <div class="diagram">
+    <div class="dlabel">Worker Storage Layering</div>
+    <div class="diagram-row">
+      <div class="dbox">BlockStore<small>(facade)</small></div>
+    </div>
+    <div class="darrow down">↓ &nbsp; ↓</div>
+    <div class="diagram-row">
+      <div class="dbox green">PhysicalDataset<small>DirList + SPDK<br>capacity (atomics)<br>&amp;self, Arc-shared</small></div>
+      <div style="width: 16px;"></div>
+      <div class="dbox green">RegularBlockStore<small>catalog RwLock<br>open/finalize/abort<br>remove lifecycle</small></div>
+    </div>
+    <div class="darrow down">↓ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ↓</div>
+    <div class="diagram-row">
+      <div class="dbox accent">DirList<small>choose_dir (Mutex)<br>VfsDir × N</small></div>
+      <div style="width: 16px;"></div>
+      <div class="dbox accent">RegularBlockCatalog<small>HashMap&lt;i64, BlockMeta&gt;<br>delete counter (atomic)<br>no IO, no capacity</small></div>
+    </div>
+  </div>
+
+  <div class="callout blue">
+    <div class="callout-title">Why split PhysicalDataset from the catalog?</div>
+    Read-cache blocks and write-buffer blocks will live on the same disks as regular blocks. Sharing one
+    <code>Arc&lt;PhysicalDataset&gt;</code> avoids double-counting capacity and lets each block-purpose orchestrator
+    manage its own logical index independently. The physical layer works entirely on <code>&amp;self</code> —
+    placement chooser and SPDK allocator use internal locks.
+  </div>
+
+  <div class="callout amber">
+    <div class="callout-title">Watch out for: BlockMeta not yet split</div>
+    <code>BlockMeta</code> still bundles path rules, reader/writer factories, and capacity state with the catalog
+    entry. Splitting it into a lean <code>PhysicalBlockRecord</code> is deferred until the HashBG model is validated
+    (per the layering plan). The catalog entries are heavier than ideal — but the interface is ready for the split.
+  </div>
+
+  <div class="callout green">
+    <div class="callout-title">Key design decision: stable hashing with splitmix64</div>
+    <code>splitmix64(inode_id) ^ splitmix64(block_index)</code> gives good distribution without a dependency on a
+    hashing crate. The hash is deterministic — the same block always maps to the same BG, enabling consistent
+    lookup across client and master.
+  </div>
+</div>
+
+<!-- CODE WALKTHROUGH -->
+<div class="section" id="code-walkthrough">
+  <h2>Code Walkthrough</h2>
+
+  <h3>1. Proto &amp; RPC Contracts <code style="font-size:0.78rem;color:var(--muted);">curvine-common/proto/</code></h3>
+  <p><code>common.proto</code> adds <code>LogicalBlockIdProto</code> (inode_id, block_index, f_version).
+  <code>worker.proto</code> adds four new message types: <code>HashBlockWriteRequest/Response</code>,
+  <code>HashBlockReadRequest/Response</code>, <code>HashBlockDeleteRequest/Response</code>.
+  <code>rpc_code.rs</code> reserves RPC codes 84–86.</p>
+
+  <h3>2. Topology &amp; Routing <span class="tag new">NEW</span> <code style="font-size:0.78rem;color:var(--muted);">curvine-common/src/topology/</code></h3>
+  <p><code>cluster_view.rs</code> defines the entire routing vocabulary:</p>
+  <ul>
+    <li><code>LogicalBlockId</code> — 16-byte identity (inode_id + block_index + f_version), with <code>as_u128()</code>/<code>from_u128()</code> for compact storage</li>
+    <li><code>BlockPurpose</code> enum — <code>Regular</code>, <code>ReadCache</code>, <code>WriteBuffer</code></li>
+    <li><code>HashBlockKey</code> — full identity tuple (purpose + bg_id + block_id + version)</li>
+    <li><code>BgInfo</code> — a block group: id, purpose, storage type, worker list, primary index</li>
+    <li><code>ClusterView</code> — routing table: bg_count BGs, each mapped to workers. Implements <code>HashBgRouter</code> trait</li>
+    <li><code>stable_hash_logical_block()</code> — splitmix64-based deterministic hash</li>
+  </ul>
+  <p>Unit tests cover BG routing stability, primary worker selection, u128 round-trips, and rejection of
+  invalid inputs (bg_count=0, empty workers).</p>
+
+  <h3>3. Error Types <code style="font-size:0.78rem;color:var(--muted);">curvine-common/src/error/fs_error.rs</code></h3>
+  <p>Three new error variants: <code>HashBlockCacheMiss</code>, <code>HashBlockNotReady</code>,
+  <code>HashBlockCorrupt</code>. Added <code>is_hash_block_read_retryable()</code> — cache miss and
+  not-ready are retryable.</p>
+
+  <h3>4. Physical Dataset <span class="tag new">NEW</span> <code style="font-size:0.78rem;color:var(--muted);">worker/storage/physical_dataset.rs</code></h3>
+  <p>Replaces <code>VfsDataset</code>. Owns <code>DirList</code>, SPDK metadata store, capacity counters.
+  All methods on <code>&amp;self</code>, shared as <code>Arc</code>. The old <code>Dataset</code> trait and
+  <code>vfs_dataset.rs</code> (576 lines) are deleted. <code>DirList::choose_dir</code> now takes
+  <code>&amp;self</code> (chooser behind <code>Mutex</code>).</p>
+
+  <h3>5. Regular Block Catalog &amp; Store <span class="tag new">NEW</span></h3>
+  <p><code>RegularBlockCatalog</code> — plain <code>HashMap&lt;i64, BlockMeta&gt;</code> + atomic delete
+  counter. No IO, no capacity state. <code>RegularBlockStore</code> orchestrates catalog with physical
+  dataset: open/finalize/abort/remove, capacity accounting, SPDK lifecycle.</p>
+
+  <h3>6. BlockStore Facade &amp; Metrics</h3>
+  <p><code>BlockStore</code> holds <code>Arc&lt;PhysicalDataset&gt;</code> + <code>Arc&lt;RegularBlockStore&gt;</code>
+  and delegates. New <code>BlockStoreStats</code> struct replaces old <code>Dataset</code> trait reads.
+  <code>WorkerMetrics</code> uses <code>stats()</code> instead of acquiring a read lock.</p>
+
+  <h3>7. Design Docs</h3>
+  <p>Two root-level design docs document the overall architecture and the P1–P6 phased plan.</p>
+
+  <table class="file-table">
+    <thead><tr><th>File</th><th>Change</th><th>Lines</th></tr></thead>
+    <tbody>
+      <tr><td>proto/common.proto</td><td><span class="tag mod">mod</span></td><td class="added">+8</td></tr>
+      <tr><td>proto/worker.proto</td><td><span class="tag mod">mod</span></td><td class="added">+47</td></tr>
+      <tr><td>topology/cluster_view.rs</td><td><span class="tag new">new</span></td><td class="added">+498</td></tr>
+      <tr><td>topology/mod.rs</td><td><span class="tag new">new</span></td><td class="added">+21</td></tr>
+      <tr><td>error/fs_error.rs</td><td><span class="tag mod">mod</span></td><td class="added">+51</td></tr>
+      <tr><td>fs/rpc_code.rs</td><td><span class="tag mod">mod</span></td><td class="added">+3</td></tr>
+      <tr><td>storage/physical_dataset.rs</td><td><span class="tag new">new</span></td><td class="added">+317</td></tr>
+      <tr><td>block/regular_store.rs</td><td><span class="tag new">new</span></td><td class="added">+465</td></tr>
+      <tr><td>catalog/regular_catalog.rs</td><td><span class="tag new">new</span></td><td class="added">+80</td></tr>
+      <tr><td>block/block_store.rs</td><td><span class="tag mod">mod</span></td><td class="added">+41</td> <span class="removed">−92</span></tr>
+      <tr><td>storage/vfs_dataset.rs</td><td><span class="tag del">del</span></td><td class="removed">−576</td></tr>
+      <tr><td>storage/dataset.rs</td><td><span class="tag del">del</span></td><td class="removed">−64</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- HOW TO TEST -->
+<div class="section" id="how-to-test">
+  <h2>How to Test</h2>
+
+  <div class="test-step">
+    <div class="test-num">1</div>
+    <div class="test-body">
+      <strong>Build</strong>
+      <pre>cargo build --package curvine-common
+cargo build --package curvine-server</pre>
+    </div>
+  </div>
+
+  <div class="test-step">
+    <div class="test-num">2</div>
+    <div class="test-body">
+      <strong>Unit Tests — Topology</strong>
+      <pre>cargo test --package curvine-common -- topology::cluster_view
+
+# Expected: 5 tests pass
+# - static_cluster_view_has_32_bgs_and_3_workers
+# - get_bg_is_stable_for_same_block_id
+# - get_bg_by_id_returns_expected_primary
+# - logical_block_id_round_trips_u128
+# - logical_block_id_from_file_offset_starts_at_one
+# - custom_view_rejects_invalid_input</pre>
+    </div>
+  </div>
+
+  <div class="test-step">
+    <div class="test-num">3</div>
+    <div class="test-body">
+      <strong>RegularBlockStore Tests</strong>
+      <pre>cargo test --package curvine-server -- worker::block::regular_store
+
+# Verify: open → finalize → get → remove lifecycle
+# Verify: SPDK path skips file deletion
+# Verify: abort cleans up catalog + space</pre>
+    </div>
+  </div>
+
+  <div class="test-step">
+    <div class="test-num">4</div>
+    <div class="test-body">
+      <strong>Integration — Worker Boot</strong>
+      <pre># Start worker with mixed MEM + SSD dirs, verify clean boot:
+# data_dir = ["[MEM:100B]...", "[SSD:200B]...", "[SSD:200B]..."]
+# Expected: heartbeat sends correct storage info to master</pre>
+    </div>
+  </div>
+
+  <h3>Edge Cases</h3>
+  <ul>
+    <li><strong>SPDK bdev collision</strong> — two dirs mapping to same bdev name → clear error</li>
+    <li><strong>bg_count = 0</strong> — <code>ClusterView::new</code> returns <code>Err</code></li>
+    <li><strong>Empty workers</strong> — <code>ClusterView::new</code> returns <code>Err</code></li>
+    <li><strong>Primary index out of range</strong> — <code>BgInfo::new</code> returns <code>Err</code></li>
+    <li><strong>Block not found</strong> — <code>get_block</code> / <code>abort_block</code> returns <code>Err</code>, not panic</li>
+  </ul>
+</div>
+
+<footer>
+  Generated by generate-pr-description skill (v2) &bull; CurvineIO/curvine-max &bull; branch: codex/hashbg-p1-worker-foundation-contracts
+</footer>
+
+</div><!-- /content -->
+</div><!-- /layout -->
+
+<script>
+function copySnippet() {
+  var snippet = '## What\n\nRefactor worker storage into physical/logical layers and add HashBG block-group routing contracts (proto, topology, error types).\n\n## Why\n\nLays the foundation for hash-based block routing so future PRs (P2-P6) can implement read-cache, write-buffer, and client-side prewarming on shared physical infrastructure.\n\n📖 **Full description with diagrams**: https://gongxun0928.github.io/pr-pages/CurvineIO/curvine-max/pr/hashbg-p1-worker-foundation-contracts-v2/\n\n## Self-Review Checklist\n\n- [ ] Tests added or updated\n- [ ] Edge cases handled (see linked description)\n- [ ] No breaking changes (or breaking changes documented in linked description)\n- [ ] Manual testing completed';
+  navigator.clipboard.writeText(snippet).then(function() {
+    var btn = document.querySelector('.copy-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(function() { btn.textContent = 'Copy PR Snippet'; }, 2000);
+  });
+}
+
+// Highlight active ToC item on scroll
+(function() {
+  var sections = document.querySelectorAll('.section');
+  var links = document.querySelectorAll('.toc a');
+  function onScroll() {
+    var scrollY = window.scrollY + 100;
+    var current = null;
+    sections.forEach(function(s) {
+      if (s.offsetTop <= scrollY) current = s.id;
+    });
+    links.forEach(function(l) {
+      l.classList.toggle('active', l.getAttribute('href') === '#' + current);
+    });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
+</script>
+</body>
+</html>
